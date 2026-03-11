@@ -1,11 +1,10 @@
 """Tests for Layer 2: Semantic compression."""
 
-import pytest
 
 from prompt_optimizer.layers.semantic import SemanticLayer
 from prompt_optimizer.schema_registry import SchemaRegistry
 from prompt_optimizer.types import CompressionContext
-from tests.conftest import MULTI_STEP_PROMPT, POLITE_PROMPT
+from tests.conftest import MULTI_STEP_PROMPT
 
 
 class TestSemanticLayer:

@@ -6,7 +6,7 @@ communicator abstractions. Install with: pip install prompt-optimizer[csuite]
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from prompt_optimizer.blackboard import Blackboard
 from prompt_optimizer.progressive import ProgressiveOptimizer

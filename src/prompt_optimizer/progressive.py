@@ -8,9 +8,7 @@ from prompt_optimizer.tokenizer import count_tokens
 from prompt_optimizer.types import (
     CompressedPrompt,
     CompressionContext,
-    FidelityReport,
     LayerResult,
-    Recommendation,
     TokenCounts,
 )
 from prompt_optimizer.verifier import ReconstructionVerifier

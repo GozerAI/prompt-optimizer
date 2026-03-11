@@ -1,6 +1,5 @@
 """Tests for Layer 3: Context compression."""
 
-import pytest
 
 from prompt_optimizer.blackboard import Blackboard
 from prompt_optimizer.layers.contextual import ContextualLayer

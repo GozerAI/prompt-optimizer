@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 from difflib import SequenceMatcher
 
-from prompt_optimizer.blackboard import Blackboard
 from prompt_optimizer.types import (
     CompressedPrompt,
     CompressionContext,

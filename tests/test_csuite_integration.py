@@ -52,7 +52,7 @@ class TestCSuitePromptOptimizer:
     def test_custom_max_layer(self):
         adapter = CSuitePromptOptimizer(default_max_layer=1)
         result = adapter.optimize_message(payload=POLITE_PROMPT)
-        assert all(l <= 1 for l in result.layers_applied)
+        assert all(lyr <= 1 for lyr in result.layers_applied)
 
     def test_store_org_context(self):
         pointer = self.adapter.store_org_context("revenue", "$2.3M")

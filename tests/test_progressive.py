@@ -1,10 +1,9 @@
 """Tests for ProgressiveOptimizer."""
 
-import pytest
 
 from prompt_optimizer.blackboard import Blackboard
 from prompt_optimizer.progressive import ProgressiveOptimizer
-from prompt_optimizer.types import CompressionContext, Recommendation
+from prompt_optimizer.types import CompressionContext
 from tests.conftest import CONTEXT_HEAVY_PROMPT, MULTI_STEP_PROMPT, POLITE_PROMPT
 
 
@@ -20,7 +19,7 @@ class TestProgressiveOptimizer:
 
     def test_respects_max_layer(self):
         result = self.optimizer.optimize(POLITE_PROMPT, max_layer=1)
-        assert all(l <= 1 for l in result.layers_applied)
+        assert all(lyr <= 1 for lyr in result.layers_applied)
 
     def test_layer_2_applied(self):
         result = self.optimizer.optimize(MULTI_STEP_PROMPT, max_layer=2)

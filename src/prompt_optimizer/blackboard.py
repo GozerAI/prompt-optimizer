@@ -1,11 +1,18 @@
-"""Blackboard — shared state store for context pointers."""
+"""Blackboard — shared state store for context pointers.
+
+Provides versioned, namespaced shared state for inter-agent context.
+Supports subscriptions for change notifications and staleness detection.
+"""
 
 from __future__ import annotations
 
 import hashlib
 import time
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Callable, Optional
+
+# Subscriber callback type: (namespace, key, value) -> None
+SubscriberCallback = Callable[[str, str, Any], None]
 
 
 @dataclass
@@ -18,18 +25,33 @@ class VersionedEntry:
     version: int
     content_hash: str
     timestamp: float = field(default_factory=time.time)
+    source_agent: Optional[str] = None
 
     @property
     def pointer(self) -> str:
         """Return a pointer string like 'org:system_state@v3'."""
         return f"{self.namespace}:{self.key}@v{self.version}"
 
+    @property
+    def age_seconds(self) -> float:
+        """Seconds since this entry was last updated."""
+        return time.time() - self.timestamp
+
 
 class Blackboard:
-    """Shared state store for context pointers used by Layer 3 compression."""
+    """Shared state store for context pointers.
 
-    def __init__(self) -> None:
+    Features:
+    - Versioned entries with content hashing (no-op on unchanged data)
+    - Namespace-based subscriptions for change notifications
+    - Staleness detection for outdated context
+    - Snapshot/restore for session management
+    """
+
+    def __init__(self, staleness_threshold: float = 3600.0) -> None:
         self._store: dict[str, list[VersionedEntry]] = {}
+        self._subscribers: dict[str, list[SubscriberCallback]] = {}
+        self.staleness_threshold = staleness_threshold
 
     def _hash(self, value: Any) -> str:
         return hashlib.sha256(str(value).encode()).hexdigest()[:12]
@@ -37,8 +59,10 @@ class Blackboard:
     def _make_key(self, namespace: str, key: str) -> str:
         return f"{namespace}:{key}"
 
-    def put(self, namespace: str, key: str, value: Any) -> str:
-        """Store a value, return versioned pointer."""
+    def put(
+        self, namespace: str, key: str, value: Any, source_agent: str | None = None
+    ) -> str:
+        """Store a value, return versioned pointer. Notifies subscribers."""
         store_key = self._make_key(namespace, key)
         content_hash = self._hash(value)
 
@@ -58,8 +82,13 @@ class Blackboard:
             value=value,
             version=version,
             content_hash=content_hash,
+            source_agent=source_agent,
         )
         self._store[store_key].append(entry)
+
+        # Notify subscribers
+        self._notify(namespace, key, value)
+
         return entry.pointer
 
     def get(self, pointer: str) -> Any:
@@ -128,3 +157,78 @@ class Blackboard:
     def clear(self) -> None:
         """Clear all entries."""
         self._store.clear()
+
+    # --- Subscriptions ---
+
+    def subscribe(self, namespace: str, callback: SubscriberCallback) -> None:
+        """Subscribe to changes in a namespace."""
+        if namespace not in self._subscribers:
+            self._subscribers[namespace] = []
+        self._subscribers[namespace].append(callback)
+
+    def unsubscribe(self, namespace: str, callback: SubscriberCallback) -> None:
+        """Unsubscribe from a namespace."""
+        if namespace in self._subscribers:
+            self._subscribers[namespace] = [
+                cb for cb in self._subscribers[namespace] if cb is not callback
+            ]
+
+    def _notify(self, namespace: str, key: str, value: Any) -> None:
+        """Notify subscribers of a change."""
+        for callback in self._subscribers.get(namespace, []):
+            try:
+                callback(namespace, key, value)
+            except Exception:
+                pass  # Subscribers should not break the blackboard
+
+    # --- Staleness ---
+
+    def get_stale(self, threshold: float | None = None) -> list[str]:
+        """Return pointers whose latest entry is older than threshold seconds."""
+        threshold = threshold or self.staleness_threshold
+        now = time.time()
+        stale: list[str] = []
+
+        for entries in self._store.values():
+            latest = entries[-1]
+            if (now - latest.timestamp) > threshold:
+                stale.append(latest.pointer)
+
+        return stale
+
+    def is_stale(self, pointer: str, threshold: float | None = None) -> bool:
+        """Check if a specific pointer is stale."""
+        threshold = threshold or self.staleness_threshold
+        try:
+            base = pointer.rsplit("@v", 1)[0] if "@v" in pointer else pointer
+            if base not in self._store:
+                return True
+            latest = self._store[base][-1]
+            return latest.age_seconds > threshold
+        except (KeyError, IndexError):
+            return True
+
+    # --- Namespaces ---
+
+    @property
+    def namespaces(self) -> list[str]:
+        """List all namespaces that have entries."""
+        ns: set[str] = set()
+        for entries in self._store.values():
+            ns.add(entries[-1].namespace)
+        return sorted(ns)
+
+    # --- Restore ---
+
+    def restore(self, snapshot: dict[str, Any]) -> None:
+        """Restore state from a snapshot (inverse of snapshot())."""
+        self._store.clear()
+        for pointer, value in snapshot.items():
+            # Parse pointer: namespace:key@vN
+            if "@v" in pointer:
+                base, _ = pointer.rsplit("@v", 1)
+            else:
+                base = pointer
+            parts = base.split(":", 1)
+            if len(parts) == 2:
+                self.put(parts[0], parts[1], value)

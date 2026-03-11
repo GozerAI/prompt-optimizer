@@ -1,11 +1,15 @@
-"""Layer 1: Structural compression — strip natural language into typed envelopes."""
+"""Layer 1: Structural compression — strip natural language into typed envelopes.
+
+Uses the grammar Compiler for NL → AST conversion and the Renderer for
+AST → compact wire format. Falls back to filler-stripping only when the
+Compiler can't extract structure.
+"""
 
 from __future__ import annotations
 
 import re
-from typing import Optional
 
-from prompt_optimizer.envelope import TypedEnvelope
+from prompt_optimizer.grammar import Compiler, Lexer, Parser, Renderer
 from prompt_optimizer.layers.base import CompressionLayer
 from prompt_optimizer.tokenizer import count_tokens
 from prompt_optimizer.types import CompressionContext, LayerResult
@@ -82,18 +86,21 @@ class StructuralLayer(CompressionLayer):
 
     def __init__(self, extra_filler_patterns: list[str] | None = None) -> None:
         self._extra_patterns = extra_filler_patterns or []
+        self._compiler = Compiler()
+        self._renderer = Renderer()
+        self._lexer = Lexer()
 
     def compress(self, text: str, context: CompressionContext) -> LayerResult:
         input_tokens = count_tokens(text)
         transformations: list[str] = []
 
-        # Step 1: Extract envelope from ORIGINAL text (before stripping)
-        # Only extract envelope for single-action prompts; multi-step is L2's job
+        # Step 1: Try Compiler on ORIGINAL text (before stripping)
+        # Only compile single-action prompts; multi-step pipelines are L2's job
         sentence_count = len([s for s in re.split(r"[.!?]\s+", text) if s.strip()])
         action_count = sum(1 for p, _ in ACTION_PATTERNS if re.search(p, text))
-        envelope = None
+        ast = None
         if sentence_count <= 2 or action_count <= 1:
-            envelope = self._extract_envelope(text, context)
+            ast = self._compiler.compile(text)
 
         # Step 2: Strip filler
         cleaned = text
@@ -108,12 +115,12 @@ class StructuralLayer(CompressionLayer):
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
         # Step 3: Generate compact output
-        if envelope:
-            output = envelope.to_compact()
-            transformations.append("converted to envelope")
+        if ast:
+            output = self._renderer.render(ast)
+            transformations.append("compiled to AST and rendered")
         else:
             output = cleaned
-            transformations.append("filler stripped only (no envelope extracted)")
+            transformations.append("filler stripped only (no AST extracted)")
 
         output_tokens = count_tokens(output)
 
@@ -134,146 +141,22 @@ class StructuralLayer(CompressionLayer):
 
         Since L1 is lossy on filler (intentionally), decompression
         produces a clean version without restoring filler.
+        Uses the grammar Parser → Renderer.render_human() pipeline.
         """
-        # If it looks like an envelope, expand it
+        # If it looks like compact grammar notation, parse and render as human-readable
         if compressed.startswith("@") or any(
             compressed.startswith(a) for a in ("ANALYZE", "GENERATE", "DECIDE", "SUMMARIZE",
                                                 "DELEGATE", "RECOMMEND", "FORECAST", "REPORT",
                                                 "PLAN", "MONITOR", "OPTIMIZE", "ASSESS",
-                                                "EVALUATE", "REVIEW")
+                                                "EVALUATE", "REVIEW", "COST", "APPROVE")
         ):
-            return self._expand_compact(compressed)
+            try:
+                tokens = self._lexer.tokenize(compressed)
+                ast = Parser(tokens).parse()
+                return self._renderer.render_human(ast)
+            except Exception:
+                return self._expand_compact(compressed)
         return compressed
-
-    def _extract_envelope(self, text: str, context: CompressionContext) -> Optional[TypedEnvelope]:
-        """Try to extract a TypedEnvelope from cleaned text."""
-        action = None
-        for pattern, action_name in ACTION_PATTERNS:
-            if re.search(pattern, text):
-                action = action_name
-                break
-
-        if not action:
-            return None
-
-        # Extract recipient
-        recipient = None
-        for pattern in AGENT_PATTERNS:
-            match = re.search(pattern, text)
-            if match:
-                recipient = match.group(1).upper()
-                break
-
-        # Also check context for agent codes
-        if not recipient and context.agent_codes:
-            for code in context.agent_codes:
-                if re.search(rf"\b{re.escape(code)}\b", text, re.IGNORECASE):
-                    recipient = code.upper()
-                    break
-
-        # Extract target: the main noun/object after the action verb
-        target = self._extract_target(text, action)
-
-        # Extract priority
-        priority = None
-        for pattern, level in PRIORITY_PATTERNS:
-            if re.search(pattern, text):
-                priority = level
-                break
-
-        # Extract modifiers
-        modifiers: list[str] = []
-        for pattern, mod in MODIFIER_PATTERNS:
-            if re.search(pattern, text):
-                modifiers.append(mod)
-
-        # Extract constraints (sentences with "must", "should", "within", "limit")
-        constraints = self._extract_constraints(text)
-
-        # Extract params (key-value-like patterns)
-        params = self._extract_params(text)
-
-        # Extract response format hints
-        response_format = self._extract_response_format(text)
-
-        return TypedEnvelope(
-            action=action,
-            target=target or "unspecified",
-            params=params,
-            constraints=constraints,
-            response_format=response_format,
-            recipient=recipient,
-            priority=priority,
-            modifiers=modifiers,
-        )
-
-    def _extract_target(self, text: str, action: str) -> Optional[str]:
-        """Extract the main object/target of the action."""
-        # Look for "analyze X", "generate X report", etc.
-        for pattern, action_name in ACTION_PATTERNS:
-            if action_name == action:
-                match = re.search(pattern + r"\s+(?:the\s+)?(.+?)(?:\s+and\s|\s+for\s|\s+with\s|[.,;]|$)", text)
-                if match:
-                    target = match.group(2) if match.lastindex and match.lastindex >= 2 else None
-                    if not target:
-                        # Try broader capture
-                        after_verb = re.search(pattern + r"\s+(?:the\s+)?(\S+(?:\s+\S+){0,3})", text)
-                        if after_verb:
-                            target = after_verb.group(after_verb.lastindex or 1)
-                    if target:
-                        return target.strip().rstrip(".,;:!?")
-        return None
-
-    def _extract_constraints(self, text: str) -> list[str]:
-        """Extract constraint phrases."""
-        constraints: list[str] = []
-        constraint_patterns = [
-            r"(?i)\bmust\s+(.+?)(?:[.,;]|$)",
-            r"(?i)\bshould\s+(.+?)(?:[.,;]|$)",
-            r"(?i)\bwithin\s+(.+?)(?:[.,;]|$)",
-            r"(?i)\blimit(?:ed)?\s+(?:to\s+)?(.+?)(?:[.,;]|$)",
-            r"(?i)\bno more than\s+(.+?)(?:[.,;]|$)",
-            r"(?i)\bat (?:most|least)\s+(.+?)(?:[.,;]|$)",
-        ]
-        for pattern in constraint_patterns:
-            for match in re.finditer(pattern, text):
-                constraints.append(match.group(1).strip())
-        return constraints
-
-    def _extract_params(self, text: str) -> dict[str, str]:
-        """Extract key-value-like parameters."""
-        params: dict[str, str] = {}
-
-        # Period/time references
-        time_match = re.search(r"(?i)\b(Q[1-4]\s*\d{4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d{4}|\d{4})", text)
-        if time_match:
-            params["period"] = time_match.group(1)
-
-        # Comparison references
-        compare_match = re.search(r"(?i)compar(?:e|ed|ing)\s+(?:to|with|against)\s+(.+?)(?:[.,;]|$)", text)
-        if compare_match:
-            params["compare"] = compare_match.group(1).strip()
-
-        # Numeric values
-        for match in re.finditer(r"(?i)(\w+)\s+(?:of|is|are|was|=)\s+(\$?[\d,.]+%?)", text):
-            params[match.group(1).lower()] = match.group(2)
-
-        return params
-
-    def _extract_response_format(self, text: str) -> Optional[str]:
-        """Extract response format hints."""
-        format_patterns = [
-            (r"(?i)\b(breakdown|itemized|line[- ]by[- ]line)\b", "breakdown"),
-            (r"(?i)\b(summary|overview|highlights)\b", "summary"),
-            (r"(?i)\b(report|analysis|assessment)\b", "report"),
-            (r"(?i)\b(list|bullet points?|enumerat[es]*)\b", "list"),
-            (r"(?i)\b(table|matrix|grid)\b", "table"),
-            (r"(?i)\b(yes[/ ]no|binary|go[/ ]no[- ]go)\b", "decision"),
-        ]
-        for pattern, fmt in format_patterns:
-            if re.search(pattern, text):
-                return fmt
-        return None
 
     def _expand_compact(self, compact: str) -> str:
         """Expand compact envelope notation back to readable text."""

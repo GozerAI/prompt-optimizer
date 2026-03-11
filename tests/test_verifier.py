@@ -2,7 +2,6 @@
 
 from prompt_optimizer.types import (
     CompressedPrompt,
-    CompressionContext,
     LayerResult,
     Recommendation,
     TokenCounts,

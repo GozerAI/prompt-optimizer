@@ -1,10 +1,26 @@
-"""Typed envelope — structured message format replacing natural language."""
+"""Typed envelope — structured message format replacing natural language.
+
+Includes bridge methods to/from the grammar AST, allowing envelopes and
+AST nodes to be used interchangeably.
+"""
 
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
 from typing import Any, Optional
+
+from prompt_optimizer.grammar.ast_nodes import (
+    ConstraintNode,
+    ConstraintsNode,
+    DirectiveNode,
+    ModifierNode,
+    OutputNode,
+    ParamNode,
+    ParamsNode,
+    PriorityNode,
+    RecipientNode,
+)
 
 
 @dataclass
@@ -84,4 +100,58 @@ class TypedEnvelope:
             recipient=data.get("recipient"),
             priority=data.get("priority"),
             modifiers=data.get("modifiers", []),
+        )
+
+    def to_ast(self) -> DirectiveNode:
+        """Convert envelope to a grammar AST DirectiveNode."""
+        recipient = RecipientNode(agent_code=self.recipient) if self.recipient else None
+
+        params = None
+        if self.params:
+            params = ParamsNode(
+                params=[ParamNode(key=k, value=str(v)) for k, v in self.params.items()]
+            )
+
+        constraints = None
+        if self.constraints:
+            constraints = ConstraintsNode(
+                constraints=[ConstraintNode(text=c) for c in self.constraints]
+            )
+
+        output = OutputNode(format=self.response_format) if self.response_format else None
+        priority = PriorityNode(level=self.priority) if self.priority and self.priority != "normal" else None
+        modifiers = [ModifierNode(name=m) for m in self.modifiers]
+
+        return DirectiveNode(
+            action=self.action.upper(),
+            target=self.target,
+            recipient=recipient,
+            params=params,
+            constraints=constraints,
+            output=output,
+            priority=priority,
+            modifiers=modifiers,
+        )
+
+    @classmethod
+    def from_ast(cls, node: DirectiveNode) -> TypedEnvelope:
+        """Create an envelope from a grammar AST DirectiveNode."""
+        params: dict[str, Any] = {}
+        if node.params:
+            for p in node.params.params:
+                params[p.key] = p.value if p.value is not None else True
+
+        constraints: list[str] = []
+        if node.constraints:
+            constraints = [c.text for c in node.constraints.constraints]
+
+        return cls(
+            action=node.action.lower(),
+            target=node.target,
+            params=params,
+            constraints=constraints,
+            response_format=node.output.format if node.output else None,
+            recipient=node.recipient.agent_code if node.recipient else None,
+            priority=node.priority.level if node.priority else None,
+            modifiers=[m.name for m in node.modifiers],
         )

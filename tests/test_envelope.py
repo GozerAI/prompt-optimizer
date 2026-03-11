@@ -1,6 +1,7 @@
 """Tests for TypedEnvelope."""
 
 from prompt_optimizer.envelope import TypedEnvelope
+from prompt_optimizer.grammar.ast_nodes import DirectiveNode, ParamNode, ParamsNode, RecipientNode
 
 
 class TestTypedEnvelope:
@@ -96,3 +97,81 @@ class TestTypedEnvelope:
         env = TypedEnvelope(action="analyze", target="revenue", priority="normal")
         compact = env.to_compact()
         assert "!normal" not in compact
+
+    # --- AST bridge tests ---
+
+    def test_to_ast_basic(self):
+        env = TypedEnvelope(action="analyze", target="revenue", recipient="CFO")
+        node = env.to_ast()
+        assert isinstance(node, DirectiveNode)
+        assert node.action == "ANALYZE"
+        assert node.target == "revenue"
+        assert node.recipient.agent_code == "CFO"
+
+    def test_to_ast_with_params(self):
+        env = TypedEnvelope(action="analyze", target="revenue", params={"period": "Q1-2026"})
+        node = env.to_ast()
+        assert node.params is not None
+        assert node.params.params[0].key == "period"
+        assert node.params.params[0].value == "Q1-2026"
+
+    def test_to_ast_with_all_fields(self):
+        env = TypedEnvelope(
+            action="analyze", target="revenue", recipient="CFO",
+            params={"period": "Q1-2026"}, constraints=["within 2h"],
+            response_format="summary", priority="urgent", modifiers=["thorough"],
+        )
+        node = env.to_ast()
+        assert node.recipient.agent_code == "CFO"
+        assert node.params.params[0].key == "period"
+        assert node.constraints.constraints[0].text == "within 2h"
+        assert node.output.format == "summary"
+        assert node.priority.level == "urgent"
+        assert node.modifiers[0].name == "thorough"
+
+    def test_to_ast_normal_priority_skipped(self):
+        env = TypedEnvelope(action="analyze", target="revenue", priority="normal")
+        node = env.to_ast()
+        assert node.priority is None
+
+    def test_from_ast_basic(self):
+        node = DirectiveNode(
+            action="ANALYZE", target="revenue",
+            recipient=RecipientNode(agent_code="CFO"),
+        )
+        env = TypedEnvelope.from_ast(node)
+        assert env.action == "analyze"
+        assert env.target == "revenue"
+        assert env.recipient == "CFO"
+
+    def test_from_ast_with_params(self):
+        node = DirectiveNode(
+            action="ANALYZE", target="revenue",
+            params=ParamsNode(params=[ParamNode(key="period", value="Q1-2026")]),
+        )
+        env = TypedEnvelope.from_ast(node)
+        assert env.params == {"period": "Q1-2026"}
+
+    def test_from_ast_bare_keyword_param(self):
+        node = DirectiveNode(
+            action="COST", target="estimate",
+            params=ParamsNode(params=[ParamNode(key="inherit")]),
+        )
+        env = TypedEnvelope.from_ast(node)
+        assert env.params == {"inherit": True}
+
+    def test_ast_roundtrip(self):
+        original = TypedEnvelope(
+            action="analyze", target="revenue", recipient="CFO",
+            params={"period": "Q1-2026"}, constraints=["within 2h"],
+            response_format="summary", priority="urgent", modifiers=["thorough"],
+        )
+        restored = TypedEnvelope.from_ast(original.to_ast())
+        assert restored.action == original.action
+        assert restored.target == original.target
+        assert restored.recipient == original.recipient
+        assert restored.params == original.params
+        assert restored.constraints == original.constraints
+        assert restored.response_format == original.response_format
+        assert restored.priority == original.priority
+        assert restored.modifiers == original.modifiers

@@ -1,10 +1,9 @@
 """Tests for Layer 1: Structural compression."""
 
-import pytest
 
 from prompt_optimizer.layers.structural import StructuralLayer
 from prompt_optimizer.types import CompressionContext
-from tests.conftest import POLITE_PROMPT, SIMPLE_PROMPT, MINIMAL_PROMPT
+from tests.conftest import POLITE_PROMPT, MINIMAL_PROMPT
 
 
 class TestStructuralLayer:
@@ -41,7 +40,7 @@ class TestStructuralLayer:
 
     def test_extracts_envelope(self):
         result = self.layer.compress(POLITE_PROMPT, self.context)
-        assert "converted to envelope" in str(result.transformations)
+        assert "compiled to AST and rendered" in str(result.transformations)
 
     def test_minimal_prompt_no_error(self):
         result = self.layer.compress(MINIMAL_PROMPT, self.context)
