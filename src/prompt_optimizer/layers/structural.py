@@ -114,8 +114,25 @@ class StructuralLayer(CompressionLayer):
         # Normalize whitespace
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
-        # Step 3: Generate compact output
+        # Step 3: Generate compact output — prefer AIL when available
+        ail_output = None
         if ast:
+            try:
+                from prompt_optimizer.integrations.ail_bridge import (
+                    compact_via_ail,
+                    directive_to_ail,
+                )
+                ail_node = directive_to_ail(ast)
+                if ail_node is not None:
+                    from ail.compiler.emitter import Emitter
+                    ail_output = Emitter().emit(ail_node)
+            except Exception:
+                pass
+
+        if ail_output:
+            output = ail_output
+            transformations.append("compiled to AIL wire format")
+        elif ast:
             output = self._renderer.render(ast)
             transformations.append("compiled to AST and rendered")
         else:

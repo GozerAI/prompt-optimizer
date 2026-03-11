@@ -40,7 +40,8 @@ class TestStructuralLayer:
 
     def test_extracts_envelope(self):
         result = self.layer.compress(POLITE_PROMPT, self.context)
-        assert "compiled to AST and rendered" in str(result.transformations)
+        xforms = str(result.transformations)
+        assert "compiled to AST and rendered" in xforms or "compiled to AIL wire format" in xforms
 
     def test_minimal_prompt_no_error(self):
         result = self.layer.compress(MINIMAL_PROMPT, self.context)
