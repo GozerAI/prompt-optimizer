@@ -20,24 +20,12 @@ class EnvelopeSchema:
 class SchemaRegistry:
     """Shared vocabulary for agent communication abbreviations."""
 
-    # Default C-Suite executive codes
+    # Default agent codes
     DEFAULT_AGENT_CODES = {
-        "Chief Executive Officer": "CEO",
-        "Chief Operating Officer": "COO",
-        "Chief Technology Officer": "CTO",
-        "Chief Financial Officer": "CFO",
-        "Chief Information Officer": "CIO",
-        "Chief Marketing Officer": "CMO",
-        "Chief Human Resources Officer": "CHRO",
-        "Chief Legal Officer": "CLO",
-        "Chief Security Officer": "CSO",
-        "Chief Data Officer": "CDO",
-        "Chief Product Officer": "CPO",
-        "Chief Revenue Officer": "CRO",
-        "Chief Strategy Officer": "CSTRO",
-        "Chief Innovation Officer": "CINO",
-        "Chief Risk Officer": "CRISKO",
-        "Chief Sustainability Officer": "CSUSO",
+        "agent_1": "A1",
+        "agent_2": "A2",
+        "agent_3": "A3",
+        "agent_4": "A4",
     }
 
     # Standard action verbs
