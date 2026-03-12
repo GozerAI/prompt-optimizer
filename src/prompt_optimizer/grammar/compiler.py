@@ -18,9 +18,11 @@ from prompt_optimizer.grammar.ast_nodes import (
     ExpressionNode,
     ModifierNode,
     OutputNode,
+    ParallelBlockNode,
     ParamNode,
     ParamsNode,
     PipelineNode,
+    PrevRefNode,
     PriorityNode,
     RecipientNode,
 )
@@ -91,6 +93,12 @@ STEP_PATTERNS = [
     (r"(?i)\b(?:finally|lastly|last|step\s*3)[,:]?\s*(.+?)(?:\.\s*|\n|$)", 3),
 ]
 
+# Parallel detection patterns
+PARALLEL_PATTERNS = [
+    r"(?i)\b(at the same time|simultaneously|in parallel|concurrently)\b",
+    r"(?i)\b(while also|meanwhile)\b",
+]
+
 # Conditional patterns
 CONDITIONAL_PATTERN = r"(?i)\bif\s+(.+?)\s+then\s+(.+?)(?:\s+(?:else|otherwise)\s+(.+))?$"
 
@@ -123,6 +131,11 @@ class Compiler:
         cond = self._try_conditional(text)
         if cond:
             return cond
+
+        # Try parallel (simultaneous actions)
+        par = self._try_parallel(text)
+        if par:
+            return par
 
         # Try pipeline (multi-step)
         pipeline = self._try_pipeline(text)
@@ -187,6 +200,31 @@ class Compiler:
                 right=ExpressionNode(field=match.group(2)),
             )
 
+        return None
+
+    def _try_parallel(self, text: str) -> ParallelBlockNode | None:
+        """Try to parse as parallel execution."""
+        is_parallel = any(re.search(p, text) for p in PARALLEL_PATTERNS)
+        if not is_parallel:
+            return None
+
+        # Split on parallel markers
+        parts = re.split(
+            r"(?i)\b(?:at the same time|simultaneously|in parallel|concurrently|while also|meanwhile)\b[,.]?\s*",
+            text,
+        )
+        parts = [p.strip().rstrip(".,;") for p in parts if p.strip()]
+        if len(parts) < 2:
+            return None
+
+        branches: list[ASTNode] = []
+        for part in parts:
+            directive = self._try_directive(part)
+            if directive:
+                branches.append(directive)
+
+        if len(branches) >= 2:
+            return ParallelBlockNode(branches=branches)
         return None
 
     def _try_pipeline(self, text: str) -> PipelineNode | None:

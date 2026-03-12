@@ -21,17 +21,30 @@ class TokenType(Enum):
     EQUALS = auto()      # =
     COLON = auto()       # :
 
+    SEMICOLON = auto()   # ;
+    QUESTION = auto()    # ?
+
     # Keywords
     IF = auto()
     THEN = auto()
     ELSE = auto()
+    PAR = auto()
+    SEQ = auto()
+    RETRY = auto()
+    BACKOFF = auto()
+    FALLBACK = auto()
 
     # Semantic tokens
     AGENT_CODE = auto()  # CEO, CFO, CTO, etc.
+    AGENT_FIELD = auto() # @CRO.pipeline
     ACTION = auto()      # ANALYZE, ASSESS, DECIDE, etc.
     IDENTIFIER = auto()  # general words
     STRING = auto()      # quoted "strings"
     NUMBER = auto()      # numeric values
+    PREV_REF = auto()    # $prev, $prev[N]
+    BB_REF = auto()      # bb:ns:key@vN
+    PRIORITY = auto()    # !urgent, !high, !low, !normal
+    MODIFIER = auto()    # ~thorough, ~brief, ~discretion
 
     # Comparators
     GT = auto()          # >
@@ -49,7 +62,16 @@ class TokenType(Enum):
 # Sets for classification
 COMPARATORS = {TokenType.GT, TokenType.LT, TokenType.GTE, TokenType.LTE, TokenType.EQ, TokenType.NEQ, TokenType.COLON}
 
-KEYWORDS = {"IF": TokenType.IF, "THEN": TokenType.THEN, "ELSE": TokenType.ELSE}
+KEYWORDS = {
+    "IF": TokenType.IF,
+    "THEN": TokenType.THEN,
+    "ELSE": TokenType.ELSE,
+    "PAR": TokenType.PAR,
+    "SEQ": TokenType.SEQ,
+    "RETRY": TokenType.RETRY,
+    "BACKOFF": TokenType.BACKOFF,
+    "FALLBACK": TokenType.FALLBACK,
+}
 
 
 @dataclass(frozen=True)

@@ -62,11 +62,11 @@ class TestLexer:
 
     def test_priority_bang(self):
         tokens = self.lexer.tokenize("!urgent")
-        assert tokens[0].type == TokenType.BANG
+        assert tokens[0].type == TokenType.PRIORITY
 
     def test_modifier_tilde(self):
         tokens = self.lexer.tokenize("~thorough")
-        assert tokens[0].type == TokenType.TILDE
+        assert tokens[0].type == TokenType.MODIFIER
 
     def test_pipe(self):
         tokens = self.lexer.tokenize("A | B")
@@ -111,8 +111,8 @@ class TestLexer:
         assert TokenType.AGENT_CODE in types
         assert TokenType.ACTION in types
         assert TokenType.ARROW in types
-        assert TokenType.BANG in types
-        assert TokenType.TILDE in types
+        assert TokenType.PRIORITY in types
+        assert TokenType.MODIFIER in types
 
     def test_empty_input(self):
         tokens = self.lexer.tokenize("")
