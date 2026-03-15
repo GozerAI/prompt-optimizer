@@ -94,15 +94,7 @@ class StructuralLayer(CompressionLayer):
         input_tokens = count_tokens(text)
         transformations: list[str] = []
 
-        # Step 1: Try Compiler on ORIGINAL text (before stripping)
-        # Only compile single-action prompts; multi-step pipelines are L2's job
-        sentence_count = len([s for s in re.split(r"[.!?]\s+", text) if s.strip()])
-        action_count = sum(1 for p, _ in ACTION_PATTERNS if re.search(p, text))
-        ast = None
-        if sentence_count <= 2 or action_count <= 1:
-            ast = self._compiler.compile(text)
-
-        # Step 2: Strip filler
+        # Step 1: Strip filler first (always)
         cleaned = text
         all_patterns = FILLER_PATTERNS + self._extra_patterns
         for pattern in all_patterns:
@@ -114,10 +106,26 @@ class StructuralLayer(CompressionLayer):
         # Normalize whitespace
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
+        # Step 2: Try Compiler on ORIGINAL text for directive-style prompts
+        # Only compile short, action-oriented prompts (not system prompts)
+        sentence_count = len([s for s in re.split(r"[.!?]\s+", text) if s.strip()])
+        action_count = sum(1 for p, _ in ACTION_PATTERNS if re.search(p, text))
+        ast = None
+        if sentence_count <= 2 and action_count >= 1:
+            ast = self._compiler.compile(text)
+
         # Step 3: Generate compact output
+        # Only use AST if it preserves enough content (more tokens than half the cleaned version)
         if ast:
-            output = self._renderer.render(ast)
-            transformations.append("compiled to AST and rendered")
+            rendered = self._renderer.render(ast)
+            rendered_tokens = count_tokens(rendered)
+            cleaned_tokens = count_tokens(cleaned)
+            if rendered_tokens >= cleaned_tokens * 0.4:
+                output = rendered
+                transformations.append("compiled to AST and rendered")
+            else:
+                output = cleaned
+                transformations.append("AST too lossy, used filler-stripped output")
         else:
             output = cleaned
             transformations.append("filler stripped only (no AST extracted)")

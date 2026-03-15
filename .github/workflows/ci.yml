@@ -30,7 +30,7 @@ jobs:
         run: ruff check src/ tests/
 
       - name: Run tests
-        run: pytest tests/ -q --tb=short
+        run: pytest tests/ -v --tb=short --cov --cov-report=term-missing
 
   lint:
     runs-on: ubuntu-latest

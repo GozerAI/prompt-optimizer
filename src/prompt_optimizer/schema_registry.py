@@ -20,7 +20,7 @@ class EnvelopeSchema:
 class SchemaRegistry:
     """Shared vocabulary for agent communication abbreviations."""
 
-    # Default executive codes
+    # Default C-Suite executive codes
     DEFAULT_AGENT_CODES = {
         "Chief Executive Officer": "CEO",
         "Chief Operating Officer": "COO",
