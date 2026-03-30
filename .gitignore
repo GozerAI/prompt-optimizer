@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+*.egg
+.eggs/
+
+# Environment files — never commit secrets
+.env
+.env.*
+!.env.example
